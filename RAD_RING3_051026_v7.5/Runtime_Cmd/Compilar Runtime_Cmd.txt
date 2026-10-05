@@ -1,0 +1,81 @@
+rm -f Runtime_Cmd/core_cmd/*.o Runtime_Cmd/sys_cmd/*.o Runtime_Cmd/software_cmd/*.o Runtime_Cmd/lib_cmd/cmd.o
+
+# ==============================================================================
+# LBF OS - SCRIPT DE COMPILAÇÃO DO SISTEMA DE ARQUIVOS NATIVO (RUNTIME_CMD)
+# Estilo tradicional: compila um por um, linka todos no final.
+# Gera: Runtime_Cmd/lib_cmd/cmd.o  (+ lib_cmd.h e cmd.h, que são só headers)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Compilação dos CORES (as ferramentas), um arquivo por vez.
+#    Cada core é AUTÔNOMO: só depende de liblib.h + cmd.h + o próprio header.
+# ------------------------------------------------------------------------------
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -c Runtime_Cmd/core_cmd/core_create.c -o Runtime_Cmd/core_cmd/core_create.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -c Runtime_Cmd/core_cmd/core_copy.c   -o Runtime_Cmd/core_cmd/core_copy.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -c Runtime_Cmd/core_cmd/core_delete.c -o Runtime_Cmd/core_cmd/core_delete.o
+
+# ------------------------------------------------------------------------------
+# 2. Compilação do DISPATCHER (o divisor de mundos, espelho do sys_banco.c)
+# ------------------------------------------------------------------------------
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -c Runtime_Cmd/sys_cmd/sys_cmd.c -o Runtime_Cmd/sys_cmd/sys_cmd.o
+
+# ------------------------------------------------------------------------------
+# 3. LINKAGEM PARCIAL (ld -r): dispatcher + todos os cores em UM único objeto.
+#    Não usa -T user.ld nem crt0: o resultado é relocável, não executável.
+#    É AQUI que nasce o cmd.o — o pacote que o software.elf vai linkar.
+# ------------------------------------------------------------------------------
+ld -r -o Runtime_Cmd/lib_cmd/cmd.o \
+    Runtime_Cmd/sys_cmd/sys_cmd.o \
+    Runtime_Cmd/core_cmd/core_create.o \
+    Runtime_Cmd/core_cmd/core_copy.o \
+    Runtime_Cmd/core_cmd/core_delete.o
+
+# ------------------------------------------------------------------------------
+# 4. Conferência rápida (recomendada após cada build)
+# ------------------------------------------------------------------------------
+nm Runtime_Cmd/lib_cmd/cmd.o | grep " T cmd_syscall"   # deve mostrar 1 linha
+nm Runtime_Cmd/lib_cmd/cmd.o | grep " U sys_fat"       # dependências externas esperadas
+ls -la Runtime_Cmd/lib_cmd/cmd.o
+
+# ------------------------------------------------------------------------------
+# 5. (OPCIONAL) BANCADA DE TESTES: sm_cmd.elf linkado contra o pacote cmd.o.
+#    O software SÓ inclui lib_cmd.h — nunca os cores diretamente.
+# ------------------------------------------------------------------------------
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -c Runtime_Cmd/software_cmd/sm_cmd.c -o Runtime_Cmd/software_cmd/sm_cmd.o
+
+ld -m elf_x86_64 -T user.ld -static -o sm_cmd.elf \
+    system/crt0.o \
+    Runtime_Cmd/software_cmd/sm_cmd.o \
+    Runtime_Cmd/lib_cmd/cmd.o \
+    Runtime_sdk/sdk/libgui.o \
+    Runtime_sdk/sdk/TScrollBar.o \
+    Runtime_sdk/sdk/TListView.o \
+    Runtime_sdk/sdk/TComboBox.o \
+    Runtime_sdk/sdk/TComboBoxEx.o \
+    Runtime_sdk/sdk/TButton.o \
+    Runtime_sdk/sdk/TEdit.o \
+    Runtime_sdk/sdk/TMemo.o \
+    Runtime_sdk/sdk/TCheckBox.o \
+    Runtime_sdk/sdk/TRadioButton.o \
+    Runtime_sdk/sdk/TLabel.o \
+    Runtime_sdk/sdk/TImage.o \
+    Runtime_sdk/sdk/TStringGrid.o \
+    Runtime_sdk/sdk/TForm.o \
+    gui/gui.o \
+    gui/wm.o \
+    gui/z_order.o \
+    gui/gui_interaction.o \
+    system/graphics.o \
+    system/fonts.o \
+    system/string.o \
+    system/sysutils.o \
+    system/setjmp_asm.o \
+    events/input_events.o \
+    Runtime_sdk/components/TOS_IPC.o \
+    Runtime_sdk/components/TOSSerial.o \
+    system/memcpy_asm.o \
+    system/memset_asm.o \
+    system/syscall_asm.o \
+    system/malloc.o
+
+ls -la sm_cmd.elf
