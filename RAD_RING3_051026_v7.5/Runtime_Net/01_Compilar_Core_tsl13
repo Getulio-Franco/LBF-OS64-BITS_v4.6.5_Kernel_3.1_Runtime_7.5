@@ -1,0 +1,119 @@
+# 0. Limpeza dos Objetos Intermediários (.o)
+rm -f Runtime_Net/Core_tls13/*.o \
+      Runtime_Net/crypto/*.o \
+      Runtime_Net/sys_tls13/*.o \
+      Runtime_Net/lib_tls13/*.o \
+      Runtime_Net/Software/*.o
+
+# 1. Compilação dos Módulos de Criptografia (Runtime_Net/crypto)
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -c Runtime_Net/crypto/hkdf.c -o Runtime_Net/crypto/hkdf.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -c Runtime_Net/crypto/rsa_verify.c -o Runtime_Net/crypto/rsa_verify.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -c Runtime_Net/crypto/ec256.c -o Runtime_Net/crypto/ec256.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -c Runtime_Net/crypto/rng.c -o Runtime_Net/crypto/rng.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -c Runtime_Net/crypto/aes_gcm.c -o Runtime_Net/crypto/aes_gcm.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -c Runtime_Net/crypto/x25519.c -o Runtime_Net/crypto/x25519.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -c Runtime_Net/crypto/sha256.c -o Runtime_Net/crypto/sha256.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -c Runtime_Net/crypto/hmac.c -o Runtime_Net/crypto/hmac.o
+
+# 2. Compilação do Core TLS 1.3 (Runtime_Net/Core_tls13)
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -IRuntime_Net/Core_tls13 -c Runtime_Net/Core_tls13/tls13.c -o Runtime_Net/Core_tls13/tls13.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -IRuntime_Net/Core_tls13 -c Runtime_Net/Core_tls13/tls13_record.c -o Runtime_Net/Core_tls13/tls13_record.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -IRuntime_Net/Core_tls13 -c Runtime_Net/Core_tls13/tls13_handshake.c -o Runtime_Net/Core_tls13/tls13_handshake.o
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -IRuntime_Net/Core_tls13 -c Runtime_Net/Core_tls13/tls13_crypto.c -o Runtime_Net/Core_tls13/tls13_crypto.o
+
+# 3. Compilação da Camada Sys TLS 1.3 (Runtime_Net/sys_tls13)
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie -Isystem -I. -IRuntime_Net/crypto -IRuntime_Net/Core_tls13 -IRuntime_Net/sys_tls13 -c Runtime_Net/sys_tls13/sys_tls13.c -o Runtime_Net/sys_tls13/sys_tls13.o
+
+# 4. Ligação Parcial (Gera o objeto unificado em lib_tls13)
+ld -r Runtime_Net/crypto/hkdf.o \
+      Runtime_Net/crypto/rsa_verify.o \
+      Runtime_Net/crypto/ec256.o \
+      Runtime_Net/crypto/rng.o \
+      Runtime_Net/crypto/aes_gcm.o \
+      Runtime_Net/crypto/x25519.o \
+      Runtime_Net/crypto/sha256.o \
+      Runtime_Net/crypto/hmac.o \
+      Runtime_Net/Core_tls13/tls13.o \
+      Runtime_Net/Core_tls13/tls13_record.o \
+      Runtime_Net/Core_tls13/tls13_handshake.o \
+      Runtime_Net/sys_tls13/sys_tls13.o \
+      Runtime_Net/Core_tls13/tls13_crypto.o \
+      -o Runtime_Net/lib_tls13/tls13_engine.o
+
+
+# ==============================================================================
+# LBF OS - SCRIPT DE COMPILAÇÃO E LINKAGEM (RING3 - SOFTWARE / BROWSER TLS 1.3)
+# ==============================================================================
+
+# 1. Compilação do código fonte do aplicativo e utilitários de renderização
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie \
+    -Isystem -I. -I Runtime_Net/lib_tls13 -I Runtime_Net/Core_tls13 \
+    -c Runtime_Net/Software/browser.c -o Runtime_Net/Software/browser.o
+
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie \
+    -Isystem -I. -I Runtime_Net/lib_tls13 -I Runtime_Net/Core_tls13 \
+    -c Runtime_Net/Software/web_html.c -o Runtime_Net/Software/web_html.o
+
+gcc -O3 -msse3 -m64 -ffreestanding -fno-stack-protector -fno-pie \
+    -Isystem -I. -I Runtime_Net/lib_tls13 -I Runtime_Net/Core_tls13 \
+    -c Runtime_Net/Software/web_img.c -o Runtime_Net/Software/web_img.o
+
+# 2. Linkagem estática final utilizando o TLS 1.3 Engine (tls13_engine.o)
+ld -m elf_x86_64 -T user.ld -static -o browser.elf \
+    system/crt0.o \
+    Runtime_Net/Software/browser.o \
+    Runtime_Net/lib_tls13/tls13_engine.o \
+    net_user/socket.o \
+    net_user/net_interface.o \
+    net_user/tcp.o \
+    net_user/udp.o \
+    net_user/ip.o \
+    net_user/net_poll.o \
+    net_user/icmp.o \
+    net_user/arp.o \
+    net_user/dns.o \
+    net_user/dhcp.o \
+    Runtime_sdk/sdk/libgui.o \
+    Runtime_sdk/sdk/TScrollBar.o \
+    Runtime_sdk/sdk/TListView.o \
+    Runtime_sdk/sdk/TComboBox.o \
+    Runtime_sdk/sdk/TComboBoxEx.o \
+    Runtime_sdk/sdk/TButton.o \
+    Runtime_sdk/sdk/TEdit.o \
+    Runtime_sdk/sdk/TMemo.o \
+    Runtime_sdk/sdk/TCheckBox.o \
+    Runtime_sdk/sdk/TRadioButton.o \
+    Runtime_sdk/sdk/TLabel.o \
+    Runtime_sdk/sdk/TWebImage.o \
+    Runtime_sdk/sdk/TWebPage.o \
+    Runtime_Net/Software/web_html.o \
+    Runtime_Net/Software/web_img.o \
+    Runtime_sdk/sdk/TStringGrid.o \
+    gui/gui.o \
+    gui/wm.o \
+    gui/z_order.o \
+    gui/gui_interaction.o \
+    system/graphics.o \
+    system/fonts.o \
+    system/utf_8.o \
+    system/string.o \
+    system/sysutils.o \
+    system/setjmp_asm.o \
+    events/input_events.o \
+    Runtime_sdk/components/TOS_IPC.o \
+    Runtime_sdk/components/TOSSerial.o \
+    system/memcpy_asm.o \
+    system/memset_asm.o \
+    system/syscall_asm.o \
+    system/malloc.o
+
+# 3. Cópia para a Imagem do Disco
+mcopy -o -i disco_sata.img browser.elf ::/
+
+# 4. Limpeza dos Objetos Intermediários (.o)
+rm -f Runtime_Net/Software/*.o \
+      Runtime_Net/Core_tls13/*.o \
+      Runtime_Net/crypto/*.o \
+      Runtime_Net/sys_tls13/*.o \
+      Runtime_Net/lib_tls13/*.o
+
